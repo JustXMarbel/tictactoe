@@ -1,527 +1,406 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tic-Tac-Toe Arena — Play Local & Bot</title>
-  <meta name="description" content="Play Tic-Tac-Toe against an unbeatable Minimax AI bot or with friends on the same device. Self-contained standalone game." />
+  <title>Tic Tac Toe — Geist</title>
+  <meta name="description" content="A minimal tic tac toe game. Play locally with a friend or against an unbeatable AI." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    tailwind.config = { darkMode: "class" };
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            mono: ['"Geist Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+          },
+        },
+      },
+    };
   </script>
   <style>
-    @keyframes scale-in { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-    @keyframes fade-in { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
-    .animate-scale-in { animation: scale-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-    .animate-fade-in { animation: fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    .confetti-piece { position: absolute; will-change: transform, opacity; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+    html, body { background: #000; color: #fff; font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    ::selection { background: #fff; color: #000; }
+    :focus-visible { outline: 1px solid #fff; outline-offset: 2px; }
+
+    @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes mark-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+    .animate-fade-in { animation: fade-in 200ms ease-out both; }
+    .animate-mark-in { animation: mark-in 140ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .win-cell {
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0) 100%),
+        #111;
+      background-size: 200% 100%, 100% 100%;
+      animation: shimmer 1.6s linear infinite;
+    }
   </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 text-white antialiased min-h-screen">
-
-  <!-- CONFETTI LAYER -->
-  <div id="confettiLayer" class="fixed inset-0 pointer-events-none z-50 overflow-hidden"></div>
+<body class="min-h-screen bg-black text-white flex flex-col">
 
   <!-- HEADER -->
-  <header class="sticky top-0 z-40 backdrop-blur-md bg-slate-950/80 border-b border-indigo-950 px-4 py-3 sm:px-6">
-    <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <span class="font-black text-2xl tracking-tighter text-white">#</span>
-        </div>
-        <div>
-          <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-indigo-200 to-rose-200 bg-clip-text text-transparent">TIC-TAC-TOE ARENA</h1>
-          <p class="text-xs text-slate-400">Standalone edition — Local & Bot play</p>
-        </div>
+  <header class="border-b border-[#333] sticky top-0 z-30 bg-black/80 backdrop-blur">
+    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
+        <span aria-hidden>▲</span>
+        <span>Tic Tac Toe</span>
+        <span class="text-[#666] font-normal">/ geist · static</span>
       </div>
-      <div class="flex items-center gap-3">
-        <button id="soundToggle" class="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition" title="Toggle Sound">🔊</button>
-        <a href="/" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-900/20">🌐 Online Matchmaking</a>
+      <div class="flex items-center gap-2">
+        <button id="soundToggle" class="h-8 px-3 border border-[#333] text-xs font-medium hover:bg-[#111] hover:border-[#555] transition rounded-md">Sound on</button>
+        <a href="https://vercel.com/geist/brands" target="_blank" rel="noreferrer" class="h-8 px-3 border border-[#333] text-xs font-medium hover:bg-[#111] hover:border-[#555] transition rounded-md flex items-center">Geist ↗</a>
       </div>
     </div>
   </header>
 
   <!-- MAIN -->
-  <div class="max-w-5xl mx-auto px-4 py-6 sm:py-8">
+  <div class="flex-1 max-w-5xl w-full mx-auto px-6 py-14 sm:py-20">
 
-    <!-- DASHBOARD -->
-    <div id="dashboard">
-      <div class="relative rounded-3xl overflow-hidden bg-gradient-to-r from-indigo-900 to-indigo-950 border border-indigo-800 p-6 sm:p-8 shadow-xl shadow-indigo-950/50 mb-6">
-        <div class="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl"></div>
-        <div class="absolute bottom-0 left-0 -mb-8 -ml-8 w-48 h-48 bg-rose-500/10 rounded-full blur-2xl"></div>
-        <div class="relative z-10 max-w-lg">
-          <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">Standalone HTML</span>
-          <h2 class="text-2xl sm:text-3xl font-black mt-3 leading-tight tracking-tight text-white">Play Anytime, Anywhere</h2>
-          <p class="text-sm text-slate-300 mt-2 leading-relaxed">This single-file game works completely offline. Challenge the unbeatable Minimax AI or grab a friend for classic pass-and-play. For live global matchmaking, jump into the full online arena.</p>
-        </div>
+    <!-- MENU -->
+    <div id="menu" class="animate-fade-in">
+      <div class="max-w-2xl">
+        <p class="text-xs tracking-[0.12em] uppercase text-[#888] font-medium mb-6">A Geist edition</p>
+        <h1 class="text-5xl sm:text-6xl font-semibold tracking-[-0.03em] leading-[1.02]">
+          Tic tac toe, <span class="text-[#888]">reduced to essentials.</span>
+        </h1>
+        <p class="text-[#888] mt-6 text-base leading-relaxed max-w-lg">
+          Two modes. No accounts, no lobbies, no noise. Play on the same device with a friend, or take on an unbeatable minimax AI.
+        </p>
       </div>
 
-      <h3 class="text-sm font-bold tracking-wider text-indigo-400 uppercase mb-4">Select Game Option</h3>
-      <div class="space-y-4">
+      <!-- Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-[#222] border border-[#222] mt-16 rounded-lg overflow-hidden">
+        <button onclick="enterLocal()" class="group bg-black hover:bg-[#0a0a0a] p-8 text-left transition">
+          <div class="flex items-center justify-between mb-6">
+            <div class="w-10 h-10 border border-[#333] flex items-center justify-center rounded-md">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M14 19c0-2 2-3 3-3s3 1 3 3"/></svg>
+            </div>
+            <span class="text-xs font-mono text-[#666]">01</span>
+          </div>
+          <h3 class="text-lg font-semibold tracking-tight">Play with a friend</h3>
+          <p class="text-sm text-[#888] mt-2 leading-relaxed">Same device, pass and play. Session score is kept until you reload.</p>
+          <div class="mt-8 flex items-center gap-2 text-xs font-medium text-white opacity-70 group-hover:opacity-100 transition">Start local game →</div>
+        </button>
 
-        <!-- Option 1: Local -->
-        <div class="group rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-rose-500/30 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-rose-500/20 to-rose-600/10 border border-rose-500/30 flex items-center justify-center text-rose-400 text-2xl">👥</div>
-            <div>
-              <h4 class="font-bold text-white text-base group-hover:text-rose-400 transition">Option 1: With Friends on Same Device</h4>
-              <p class="text-xs text-slate-400 mt-1 max-w-md">Classic pass-and-play. Enter names and track your session scores.</p>
+        <button onclick="enterBot()" class="group bg-black hover:bg-[#0a0a0a] p-8 text-left transition">
+          <div class="flex items-center justify-between mb-6">
+            <div class="w-10 h-10 border border-[#333] flex items-center justify-center rounded-md">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 4v4"/><circle cx="9" cy="14" r="1" fill="currentColor"/><circle cx="15" cy="14" r="1" fill="currentColor"/></svg>
             </div>
+            <span class="text-xs font-mono text-[#666]">02</span>
           </div>
-          <button onclick="startLocalSetup()" class="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-rose-900/20">Play Local</button>
-        </div>
-
-        <!-- Option 2: Bot -->
-        <div class="group rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/30 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-2xl">🤖</div>
-            <div>
-              <h4 class="font-bold text-white text-base group-hover:text-emerald-400 transition">Option 2: Play Against a Bot</h4>
-              <div class="flex flex-wrap items-center gap-2 mt-1">
-                <span class="text-xs text-slate-400">Difficulty:</span>
-                <select id="botDifficulty" class="bg-slate-950 border border-slate-800 text-slate-300 text-[11px] rounded px-1.5 py-0.5 outline-none font-semibold focus:border-emerald-500">
-                  <option value="easy">Easy (Random)</option>
-                  <option value="medium">Medium (Moderate)</option>
-                  <option value="unbeatable" selected>Unbeatable (Minimax AI)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            <div class="flex items-center justify-center bg-slate-950 rounded-xl p-1 border border-slate-800">
-              <button id="symbolXBtn" onclick="setPlayerSymbol('X')" class="px-3 py-1 text-xs font-bold rounded-lg transition bg-rose-500/20 text-rose-400 border border-rose-500/40">Play as X</button>
-              <button id="symbolOBtn" onclick="setPlayerSymbol('O')" class="px-3 py-1 text-xs font-bold rounded-lg transition text-slate-400 hover:text-slate-200">Play as O</button>
-            </div>
-            <button onclick="startBotGame()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-emerald-900/20">Battle Bot</button>
-          </div>
-        </div>
-
-        <!-- Option 3: Online (links to full app) -->
-        <div class="group rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-indigo-500/30 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500/20 to-indigo-600/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-2xl">🌐</div>
-            <div>
-              <h4 class="font-bold text-white text-base group-hover:text-indigo-400 transition">Option 3: Online Matchmaking</h4>
-              <p class="text-xs text-slate-400 mt-1 max-w-md">Get paired with live players worldwide with real-time chat. Runs in the full server-powered arena.</p>
-            </div>
-          </div>
-          <a href="/" class="w-full sm:w-auto text-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-indigo-900/20">Match Online</a>
-        </div>
+          <h3 class="text-lg font-semibold tracking-tight">Play against the AI</h3>
+          <p class="text-sm text-[#888] mt-2 leading-relaxed">Three difficulty tiers, minimax on unbeatable.</p>
+          <div class="mt-8 flex items-center gap-2 text-xs font-medium text-white opacity-70 group-hover:opacity-100 transition">Start AI match →</div>
+        </button>
       </div>
-    </div>
 
-    <!-- LOCAL NAME SETUP -->
-    <div id="localSetup" class="hidden max-w-md mx-auto py-8">
-      <div class="bg-slate-900/90 border border-slate-800 p-6 rounded-3xl space-y-4 shadow-xl">
-        <div class="flex items-center justify-between">
-          <h4 class="font-bold text-base text-indigo-400">Local Players Setup</h4>
-          <button onclick="backToDashboard()" class="text-xs text-slate-400 hover:text-white">← Back</button>
-        </div>
-        <div class="space-y-3">
-          <div>
-            <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Player X Name</label>
-            <input id="localXInput" type="text" maxlength="15" value="Player X" class="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500" />
-          </div>
-          <div>
-            <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Player O Name</label>
-            <input id="localOInput" type="text" maxlength="15" value="Player O" class="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500" />
-          </div>
-        </div>
-        <button onclick="launchLocalGame()" class="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition">Start Match</button>
-      </div>
-    </div>
-
-    <!-- GAME SCREEN (shared for local & bot) -->
-    <div id="gameScreen" class="hidden">
-      <div class="flex flex-wrap items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow mb-6">
+      <!-- Inline controls -->
+      <div class="mt-8 flex flex-wrap items-center gap-6 text-sm">
         <div class="flex items-center gap-3">
-          <button onclick="backToDashboard()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs transition">← Dashboard</button>
-          <div class="h-6 w-px bg-slate-800"></div>
-          <span id="modeBadge" class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-indigo-600/20 text-indigo-400 border border-indigo-600/30">MODE</span>
+          <span class="text-[#666] text-xs font-mono uppercase tracking-wider">AI difficulty</span>
+          <div id="diffGroup" class="inline-flex border border-[#333] rounded-md overflow-hidden">
+            <button data-diff="easy" class="diff px-3 h-8 text-xs font-medium transition text-[#888] hover:text-white hover:bg-[#111]">easy</button>
+            <button data-diff="medium" class="diff px-3 h-8 text-xs font-medium transition text-[#888] hover:text-white hover:bg-[#111]">medium</button>
+            <button data-diff="unbeatable" class="diff px-3 h-8 text-xs font-medium transition bg-white text-black">unbeatable</button>
+          </div>
         </div>
-        <div id="scoreBar" class="flex items-center gap-2 text-xs font-bold"></div>
+        <div class="flex items-center gap-3">
+          <span class="text-[#666] text-xs font-mono uppercase tracking-wider">Your mark</span>
+          <div id="symGroup" class="inline-flex border border-[#333] rounded-md overflow-hidden">
+            <button data-sym="X" class="sym w-8 h-8 text-xs font-mono transition bg-white text-black">X</button>
+            <button data-sym="O" class="sym w-8 h-8 text-xs font-mono transition text-[#888] hover:text-white hover:bg-[#111]">O</button>
+          </div>
+        </div>
       </div>
 
-      <div class="max-w-md mx-auto space-y-6 py-2">
-        <div class="text-center min-h-[32px]">
-          <h3 id="statusText" class="text-base font-bold text-slate-200"></h3>
-        </div>
-        <div id="board" class="grid grid-cols-3 gap-3 bg-slate-950 p-3 rounded-2xl border border-slate-800 aspect-square max-w-[340px] mx-auto shadow-2xl"></div>
-        <div id="actionBtns" class="flex gap-2 justify-center"></div>
+      <!-- Stats -->
+      <div class="mt-16 grid grid-cols-3 gap-px bg-[#222] border border-[#222] rounded-lg overflow-hidden">
+        <div class="bg-black p-5"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666]">AI wins</p><p class="text-2xl font-mono mt-1" id="statW">0</p></div>
+        <div class="bg-black p-5"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666]">AI losses</p><p class="text-2xl font-mono mt-1" id="statL">0</p></div>
+        <div class="bg-black p-5"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666]">Draws</p><p class="text-2xl font-mono mt-1" id="statD">0</p></div>
       </div>
     </div>
 
+    <!-- GAME -->
+    <div id="game" class="hidden animate-fade-in max-w-md mx-auto">
+      <div class="flex items-center justify-between mb-8">
+        <button onclick="backToMenu()" class="text-xs font-medium text-[#888] hover:text-white transition flex items-center gap-1.5"><span>←</span> Back</button>
+        <span id="modeLabel" class="text-[10px] font-mono uppercase tracking-wider text-[#666]"></span>
+      </div>
+
+      <div id="localNames" class="hidden grid-cols-2 gap-3 mb-8 grid">
+        <label class="block">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-[#666]">Player X</span>
+          <input id="inX" type="text" maxlength="16" value="Player X" class="mt-1.5 w-full bg-black border border-[#333] rounded-md px-3 h-9 text-sm focus:border-white outline-none transition" />
+        </label>
+        <label class="block">
+          <span class="text-[10px] font-mono uppercase tracking-wider text-[#666]">Player O</span>
+          <input id="inO" type="text" maxlength="16" value="Player O" class="mt-1.5 w-full bg-black border border-[#333] rounded-md px-3 h-9 text-sm focus:border-white outline-none transition" />
+        </label>
+      </div>
+
+      <div class="text-center mb-5"><p id="status" class="text-sm font-medium tracking-tight"></p></div>
+
+      <div id="board" class="grid grid-cols-3 gap-px bg-[#333] border border-[#333] rounded-lg overflow-hidden aspect-square"></div>
+
+      <div id="scoreRow" class="mt-6 grid grid-cols-3 gap-px bg-[#222] border border-[#222] rounded-lg overflow-hidden"></div>
+
+      <div class="mt-6 flex gap-2 justify-center">
+        <button onclick="newRound()" class="h-9 px-4 bg-white text-black text-xs font-semibold rounded-md hover:bg-[#eaeaea] transition">New round</button>
+        <button onclick="backToMenu()" class="h-9 px-4 border border-[#333] text-xs font-medium rounded-md hover:bg-[#111] hover:border-[#555] transition">Change mode</button>
+      </div>
+    </div>
   </div>
 
   <!-- FOOTER -->
-  <footer class="mt-12 border-t border-indigo-950/60 bg-slate-950/40 py-8 text-center text-slate-500 text-xs px-4">
-    <div class="max-w-5xl mx-auto space-y-2">
-      <p class="font-semibold text-slate-400">Tic-Tac-Toe Arena — Standalone index.html</p>
-      <p>Pass &amp; Play • Minimax AI Bot • <a href="/" class="text-indigo-400 hover:underline">Online Matchmaking (full app)</a></p>
+  <footer class="border-t border-[#333] mt-auto">
+    <div class="max-w-5xl mx-auto px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#666]">
+      <div class="flex items-center gap-2 font-mono"><span aria-hidden>▲</span><span>Standalone · Geist · Tailwind</span></div>
+      <span class="font-mono">local · offline</span>
     </div>
   </footer>
 
   <script>
     // ---------- STATE ----------
-    let soundEnabled = true;
-    let playerSymbol = "X";
-    let currentMode = null; // 'local' | 'bot'
-    let board = Array(9).fill("");
-    let turn = "X";
+    let soundOn = localStorage.getItem('ttt_geist_sound_html') !== '0';
+    let mode = 'menu'; // 'menu' | 'local' | 'bot'
+    let difficulty = 'unbeatable';
+    let playerSymbol = 'X';
+    let board = Array(9).fill('');
+    let turn = 'X';
     let winner = null;
-    let winningLine = [];
-    let isBotThinking = false;
-    let localXName = "Player X";
-    let localOName = "Player O";
-    let botDifficulty = "unbeatable";
-    let localScores = { x: 0, o: 0, draws: 0 };
-    let botScores = { player: 0, bot: 0, draws: 0 };
+    let winLine = [];
+    let botThinking = false;
+    let localScore = { x: 0, o: 0, d: 0 };
+    let botScore = { w: 0, l: 0, d: 0 };
+    const WIN = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
-    const WINNING_COMBOS = [
-      [0,1,2],[3,4,5],[6,7,8],
-      [0,3,6],[1,4,7],[2,5,8],
-      [0,4,8],[2,4,6]
-    ];
+    // Load persisted bot score
+    try {
+      const saved = JSON.parse(localStorage.getItem('ttt_geist_botscore') || 'null');
+      if (saved) botScore = saved;
+    } catch {}
+    updateStats();
 
-    // ---------- SOUND (Web Audio API) ----------
-    function playSound(type) {
-      if (!soundEnabled) return;
+    // ---------- SOUND ----------
+    function beep(type) {
+      if (!soundOn) return;
       try {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return;
         const ctx = new Ctx();
-        if (type === "click" || type === "move") {
-          const osc = ctx.createOscillator(), gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.type = type === "click" ? "sine" : "triangle";
-          osc.frequency.setValueAtTime(type === "click" ? 600 : 450, ctx.currentTime);
+        if (type === 'click' || type === 'move') {
+          const osc = ctx.createOscillator(), g = ctx.createGain();
+          osc.connect(g); g.connect(ctx.destination);
+          osc.type = type === 'click' ? 'sine' : 'triangle';
+          osc.frequency.setValueAtTime(type === 'click' ? 600 : 450, ctx.currentTime);
           osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.1);
-          gain.gain.setValueAtTime(0.08, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+          g.gain.setValueAtTime(0.08, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
           osc.start(); osc.stop(ctx.currentTime + 0.1);
-        } else if (type === "win") {
-          [261.63,329.63,392.00,523.25].forEach((freq, i) => {
-            const osc = ctx.createOscillator(), gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(freq, ctx.currentTime + i*0.1);
-            gain.gain.setValueAtTime(0, ctx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + i*0.1 + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i*0.1 + 0.15);
+        } else if (type === 'win') {
+          [261.63,329.63,392,523.25].forEach((f, i) => {
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(f, ctx.currentTime + i*0.1);
+            g.gain.setValueAtTime(0, ctx.currentTime);
+            g.gain.linearRampToValueAtTime(0.08, ctx.currentTime + i*0.1 + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i*0.1 + 0.15);
             osc.start(ctx.currentTime + i*0.1); osc.stop(ctx.currentTime + i*0.1 + 0.15);
           });
-        } else if (type === "lose") {
-          const osc = ctx.createOscillator(), gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.type = "sawtooth";
+        } else if (type === 'lose') {
+          const osc = ctx.createOscillator(), g = ctx.createGain();
+          osc.connect(g); g.connect(ctx.destination);
+          osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(300, ctx.currentTime);
           osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.4);
-          gain.gain.setValueAtTime(0.1, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+          g.gain.setValueAtTime(0.08, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
           osc.start(); osc.stop(ctx.currentTime + 0.4);
-        } else if (type === "draw") {
-          [0,0.15].forEach(delay => {
-            const osc = ctx.createOscillator(), gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.type = "square";
-            osc.frequency.setValueAtTime(350, ctx.currentTime + delay);
-            gain.gain.setValueAtTime(0.05, ctx.currentTime + delay);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.1);
-            osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.1);
+        } else if (type === 'draw') {
+          [0, 0.15].forEach(d => {
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(350, ctx.currentTime + d);
+            g.gain.setValueAtTime(0.05, ctx.currentTime + d);
+            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + d + 0.1);
+            osc.start(ctx.currentTime + d); osc.stop(ctx.currentTime + d + 0.1);
           });
         }
-      } catch (e) {}
+      } catch {}
     }
 
-    document.getElementById("soundToggle").addEventListener("click", function () {
-      soundEnabled = !soundEnabled;
-      this.textContent = soundEnabled ? "🔊" : "🔇";
-      if (soundEnabled) playSound("click");
+    document.getElementById('soundToggle').addEventListener('click', function() {
+      soundOn = !soundOn;
+      localStorage.setItem('ttt_geist_sound_html', soundOn ? '1' : '0');
+      this.textContent = soundOn ? 'Sound on' : 'Sound off';
+      if (soundOn) beep('click');
     });
+    document.getElementById('soundToggle').textContent = soundOn ? 'Sound on' : 'Sound off';
 
-    // ---------- CONFETTI ----------
-    function launchConfetti() {
-      const layer = document.getElementById("confettiLayer");
-      const colors = ["#ef4444","#3b82f6","#10b981","#f59e0b","#ec4899","#8b5cf6","#06b6d4"];
-      const pieces = [];
-      for (let i = 0; i < 120; i++) {
-        const el = document.createElement("div");
-        el.className = "confetti-piece";
-        const size = Math.random()*8+6;
-        el.style.width = size+"px"; el.style.height = size+"px";
-        el.style.backgroundColor = colors[Math.floor(Math.random()*colors.length)];
-        el.style.borderRadius = i%3===0 ? "50%" : i%3===1 ? "0%" : "3px 10px 4px";
-        layer.appendChild(el);
-        pieces.push({ el, x:50, y:40, angle:Math.random()*360, speed:Math.random()*8+4, rot:Math.random()*360, rotSpeed:Math.random()*10-5 });
-      }
-      let elapsed = 0;
-      function frame() {
-        elapsed++;
-        pieces.forEach(p => {
-          const rad = p.angle*Math.PI/180;
-          p.x += Math.cos(rad)*p.speed/10;
-          p.y += Math.sin(rad)*p.speed/10 + elapsed*0.005;
-          p.rot += p.rotSpeed;
-          const opacity = Math.max(0, 1 - elapsed*0.003);
-          p.el.style.left = p.x+"%"; p.el.style.top = p.y+"%";
-          p.el.style.transform = "translate(-50%,-50%) rotate("+p.rot+"deg)";
-          p.el.style.opacity = opacity;
-        });
-        if (elapsed < 300) requestAnimationFrame(frame);
-        else pieces.forEach(p => p.el.remove());
-      }
-      requestAnimationFrame(frame);
-    }
+    // ---------- CONTROLS ----------
+    document.querySelectorAll('.diff').forEach(b => b.addEventListener('click', () => {
+      beep('click');
+      difficulty = b.dataset.diff;
+      document.querySelectorAll('.diff').forEach(x => {
+        x.className = 'diff px-3 h-8 text-xs font-medium transition ' + (x.dataset.diff === difficulty ? 'bg-white text-black' : 'text-[#888] hover:text-white hover:bg-[#111]');
+      });
+    }));
+    document.querySelectorAll('.sym').forEach(b => b.addEventListener('click', () => {
+      beep('click');
+      playerSymbol = b.dataset.sym;
+      document.querySelectorAll('.sym').forEach(x => {
+        x.className = 'sym w-8 h-8 text-xs font-mono transition ' + (x.dataset.sym === playerSymbol ? 'bg-white text-black' : 'text-[#888] hover:text-white hover:bg-[#111]');
+      });
+    }));
 
     // ---------- GAME LOGIC ----------
-    function checkWinner(b) {
-      for (const [a,c,d] of WINNING_COMBOS) {
-        if (b[a] && b[a] === b[c] && b[a] === b[d]) return { winner: b[a], line: [a,c,d] };
-      }
-      if (b.every(cell => cell !== "")) return { winner: "draw" };
+    function checkWin(b) {
+      for (const [a,c,d] of WIN) if (b[a] && b[a] === b[c] && b[a] === b[d]) return { winner: b[a], line: [a,c,d] };
+      if (b.every(x => x !== '')) return { winner: 'draw' };
       return { winner: null };
     }
 
-    // Minimax
     function minimax(b, depth, isMax, botSym, playerSym) {
-      const res = checkWinner(b);
-      if (res.winner === botSym) return 10 - depth;
-      if (res.winner === playerSym) return depth - 10;
-      if (res.winner === "draw") return 0;
+      const r = checkWin(b);
+      if (r.winner === botSym) return 10 - depth;
+      if (r.winner === playerSym) return depth - 10;
+      if (r.winner === 'draw') return 0;
       if (isMax) {
         let best = -1000;
-        for (let i=0;i<9;i++) if (b[i]===""){ b[i]=botSym; best=Math.max(best,minimax(b,depth+1,false,botSym,playerSym)); b[i]=""; }
+        for (let i = 0; i < 9; i++) if (b[i] === '') { b[i] = botSym; best = Math.max(best, minimax(b, depth+1, false, botSym, playerSym)); b[i] = ''; }
         return best;
       } else {
         let best = 1000;
-        for (let i=0;i<9;i++) if (b[i]===""){ b[i]=playerSym; best=Math.min(best,minimax(b,depth+1,true,botSym,playerSym)); b[i]=""; }
+        for (let i = 0; i < 9; i++) if (b[i] === '') { b[i] = playerSym; best = Math.min(best, minimax(b, depth+1, true, botSym, playerSym)); b[i] = ''; }
         return best;
       }
     }
-    function findBestMove(b, botSym, playerSym) {
-      let bestVal=-1000, bestMove=-1;
-      for (let i=0;i<9;i++) if (b[i]===""){ b[i]=botSym; const v=minimax(b,0,false,botSym,playerSym); b[i]=""; if(v>bestVal){bestVal=v;bestMove=i;} }
-      if (bestMove===-1){ const avail=b.map((c,i)=>c===""?i:-1).filter(i=>i!==-1); return avail[Math.floor(Math.random()*avail.length)]; }
-      return bestMove;
+    function bestMove(b, botSym, playerSym) {
+      let bv = -1000, bm = -1;
+      for (let i = 0; i < 9; i++) if (b[i] === '') { b[i] = botSym; const v = minimax(b, 0, false, botSym, playerSym); b[i] = ''; if (v > bv) { bv = v; bm = i; } }
+      if (bm === -1) { const a = b.map((c,i)=>c===''?i:-1).filter(i=>i!==-1); return a[Math.floor(Math.random()*a.length)]; }
+      return bm;
     }
-    function getBotMove(b, diff, botSym, playerSym) {
-      const avail = b.map((c,i)=>c===""?i:-1).filter(i=>i!==-1);
-      if (avail.length===0) return -1;
-      if (diff === "easy") return avail[Math.floor(Math.random()*avail.length)];
-      if (diff === "medium") return Math.random()<0.5 ? findBestMove(b,botSym,playerSym) : avail[Math.floor(Math.random()*avail.length)];
-      return findBestMove(b, botSym, playerSym);
-    }
-
-    // ---------- NAVIGATION ----------
-    function show(id) {
-      ["dashboard","localSetup","gameScreen"].forEach(x => document.getElementById(x).classList.add("hidden"));
-      document.getElementById(id).classList.remove("hidden");
-    }
-    function backToDashboard() { playSound("click"); currentMode=null; show("dashboard"); }
-
-    function setPlayerSymbol(sym) {
-      playSound("click");
-      playerSymbol = sym;
-      document.getElementById("symbolXBtn").className = "px-3 py-1 text-xs font-bold rounded-lg transition " + (sym==="X" ? "bg-rose-500/20 text-rose-400 border border-rose-500/40" : "text-slate-400 hover:text-slate-200");
-      document.getElementById("symbolOBtn").className = "px-3 py-1 text-xs font-bold rounded-lg transition " + (sym==="O" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40" : "text-slate-400 hover:text-slate-200");
+    function getBotMove(b) {
+      const avail = b.map((c,i)=>c===''?i:-1).filter(i=>i!==-1);
+      if (!avail.length) return -1;
+      const botSym = playerSymbol === 'X' ? 'O' : 'X';
+      if (difficulty === 'easy') return avail[Math.floor(Math.random()*avail.length)];
+      if (difficulty === 'medium') return Math.random() < 0.5 ? bestMove(b, botSym, playerSymbol) : avail[Math.floor(Math.random()*avail.length)];
+      return bestMove(b, botSym, playerSymbol);
     }
 
-    // ---------- LOCAL ----------
-    function startLocalSetup() { playSound("click"); show("localSetup"); }
-    function launchLocalGame() {
-      playSound("click");
-      localXName = document.getElementById("localXInput").value.trim() || "Player X";
-      localOName = document.getElementById("localOInput").value.trim() || "Player O";
-      currentMode = "local";
-      resetBoard();
-      show("gameScreen");
-      document.getElementById("modeBadge").textContent = "LOCAL FRIENDS";
-      render();
-    }
+    // ---------- NAV ----------
+    function show(id) { ['menu','game'].forEach(x => document.getElementById(x).classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
+    function enterLocal() { beep('click'); mode = 'local'; resetBoard(); show('game'); document.getElementById('modeLabel').textContent = 'Local · pass and play'; document.getElementById('localNames').classList.remove('hidden'); render(); }
+    function enterBot() { beep('click'); mode = 'bot'; resetBoard(); show('game'); document.getElementById('modeLabel').textContent = 'AI · ' + difficulty; document.getElementById('localNames').classList.add('hidden'); render(); if (playerSymbol === 'O') setTimeout(botTurn, 350); }
+    function backToMenu() { beep('click'); mode = 'menu'; resetBoard(); show('menu'); }
+    function resetBoard() { board = Array(9).fill(''); turn = 'X'; winner = null; winLine = []; botThinking = false; }
+    function newRound() { beep('click'); resetBoard(); render(); if (mode === 'bot' && playerSymbol === 'O') setTimeout(botTurn, 350); }
 
-    // ---------- BOT ----------
-    function startBotGame() {
-      playSound("click");
-      botDifficulty = document.getElementById("botDifficulty").value;
-      currentMode = "bot";
-      resetBoard();
-      show("gameScreen");
-      document.getElementById("modeBadge").textContent = "BOT (" + botDifficulty + ")";
-      render();
-      maybeBotMove();
-    }
-
-    function resetBoard() {
-      board = Array(9).fill("");
-      turn = "X";
-      winner = null;
-      winningLine = [];
-      isBotThinking = false;
-    }
-
-    function resetGame() {
-      playSound("click");
-      resetBoard();
-      render();
-      if (currentMode === "bot") maybeBotMove();
-    }
-
-    // ---------- MOVE HANDLING ----------
-    function cellClick(i) {
-      if (board[i] !== "" || winner) return;
-      if (currentMode === "bot") {
-        if (turn !== playerSymbol || isBotThinking) return;
-        board[i] = playerSymbol;
-        playSound("move");
-        afterMove();
-        if (!winner) maybeBotMove();
-      } else {
-        board[i] = turn;
-        playSound("move");
-        afterMove();
-        if (!winner) turn = turn === "X" ? "O" : "X";
+    // ---------- MOVES ----------
+    function onCell(i) {
+      if (winner || board[i] !== '') return;
+      if (mode === 'local') {
+        board[i] = turn; beep('move');
+        const r = checkWin(board);
+        if (r.winner) { winner = r.winner; winLine = r.line || []; endLocal(); }
+        else { turn = turn === 'X' ? 'O' : 'X'; }
         render();
+        return;
+      }
+      if (mode === 'bot') {
+        if (botThinking || turn !== playerSymbol) return;
+        board[i] = playerSymbol; beep('move');
+        const r = checkWin(board);
+        if (r.winner) { winner = r.winner; winLine = r.line || []; endBot(); render(); return; }
+        turn = playerSymbol === 'X' ? 'O' : 'X';
+        render();
+        botTurn();
       }
     }
-
-    function afterMove() {
-      const res = checkWinner(board);
-      if (res.winner) {
-        winner = res.winner;
-        winningLine = res.line || [];
-        handleGameEnd();
-      }
-      render();
-    }
-
-    function maybeBotMove() {
-      if (currentMode !== "bot" || winner) return;
-      const botSym = playerSymbol === "X" ? "O" : "X";
-      if (turn === playerSymbol) return;
-      // wait, turn logic: after player moves we flip below
-    }
-
-    // For bot mode we flip turn explicitly
-    function afterMoveBotFlip() {}
-
-    // Rework: unified move flow for bot
-    function botTurnTrigger() {
-      const botSym = playerSymbol === "X" ? "O" : "X";
-      isBotThinking = true;
-      render();
-      const delay = botDifficulty === "easy" ? 400 : botDifficulty === "medium" ? 600 : 850;
+    function botTurn() {
+      if (winner) return;
+      botThinking = true; render();
+      const delay = difficulty === 'easy' ? 320 : difficulty === 'medium' ? 520 : 780;
       setTimeout(() => {
-        const move = getBotMove(board.slice(), botDifficulty, botSym, playerSymbol);
-        if (move !== -1 && !winner) {
-          board[move] = botSym;
-          playSound("move");
-          const res = checkWinner(board);
-          if (res.winner) { winner = res.winner; winningLine = res.line || []; handleGameEnd(); }
+        if (winner) { botThinking = false; render(); return; }
+        const move = getBotMove(board.slice());
+        if (move !== -1) {
+          const botSym = playerSymbol === 'X' ? 'O' : 'X';
+          board[move] = botSym; beep('move');
+          const r = checkWin(board);
+          if (r.winner) { winner = r.winner; winLine = r.line || []; endBot(); }
           else { turn = playerSymbol; }
         }
-        isBotThinking = false;
+        botThinking = false;
         render();
       }, delay);
     }
-
-    function handleGameEnd() {
-      if (currentMode === "local") {
-        if (winner === "draw") { localScores.draws++; playSound("draw"); }
-        else { if (winner==="X") localScores.x++; else localScores.o++; playSound("win"); launchConfetti(); }
-      } else {
-        if (winner === "draw") { botScores.draws++; playSound("draw"); }
-        else if (winner === playerSymbol) { botScores.player++; playSound("win"); launchConfetti(); }
-        else { botScores.bot++; playSound("lose"); }
-      }
+    function endLocal() {
+      if (winner === 'draw') { beep('draw'); localScore.d++; }
+      else { beep('win'); if (winner === 'X') localScore.x++; else localScore.o++; }
     }
+    function endBot() {
+      if (winner === 'draw') { beep('draw'); botScore.d++; }
+      else if (winner === playerSymbol) { beep('win'); botScore.w++; }
+      else { beep('lose'); botScore.l++; }
+      localStorage.setItem('ttt_geist_botscore', JSON.stringify(botScore));
+      updateStats();
+    }
+    function updateStats() { document.getElementById('statW').textContent = botScore.w; document.getElementById('statL').textContent = botScore.l; document.getElementById('statD').textContent = botScore.d; }
 
     // ---------- RENDER ----------
+    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
     function render() {
       // Board
-      const boardEl = document.getElementById("board");
-      boardEl.innerHTML = "";
+      const boardEl = document.getElementById('board');
+      boardEl.innerHTML = '';
       board.forEach((cell, i) => {
-        const btn = document.createElement("button");
-        const isWin = winningLine.includes(i);
-        const clickable = cell === "" && !winner && !(currentMode==="bot" && (turn!==playerSymbol || isBotThinking));
-        btn.className = "rounded-xl aspect-square flex items-center justify-center text-4xl font-black transition-all " +
-          (cell === "" ? "bg-slate-900/60 hover:bg-slate-900 " : "bg-slate-900 ") +
-          (isWin ? "ring-2 ring-emerald-400 bg-emerald-950/20" : "border border-slate-800/40") +
-          (clickable ? " cursor-pointer" : "");
-        if (cell === "X") btn.innerHTML = '<span class="text-rose-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-scale-in">X</span>';
-        else if (cell === "O") btn.innerHTML = '<span class="text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)] animate-scale-in">O</span>';
-        btn.onclick = () => cellClick(i);
+        const isWin = winLine.includes(i);
+        const clickable = !winner && cell === '' && !(mode === 'bot' && (turn !== playerSymbol || botThinking));
+        const btn = document.createElement('button');
+        btn.className = 'relative aspect-square flex items-center justify-center text-5xl font-mono transition-colors ' + (isWin ? 'win-cell' : 'bg-black') + (clickable ? ' hover:bg-[#0f0f0f] cursor-pointer' : ' cursor-default');
+        btn.disabled = !clickable;
+        if (cell) btn.innerHTML = '<span class="animate-mark-in text-white">' + cell + '</span>';
+        btn.onclick = () => onCell(i);
         boardEl.appendChild(btn);
       });
 
       // Status
-      const statusEl = document.getElementById("statusText");
-      if (currentMode === "local") {
-        if (winner === "draw") statusEl.innerHTML = '<span class="text-slate-300 text-xl font-extrabold">It\'s a Draw! 🤝</span>';
-        else if (winner) statusEl.innerHTML = '<span class="text-emerald-400 text-xl font-extrabold">🎉 ' + (winner==="X"?esc(localXName):esc(localOName)) + ' Won!</span>';
-        else statusEl.innerHTML = 'Turn: <span class="' + (turn==="X"?"text-rose-400":"text-emerald-400") + '">' + (turn==="X"?esc(localXName):esc(localOName)) + ' (' + turn + ')</span>';
+      const nameX = (document.getElementById('inX')?.value || 'Player X').trim() || 'Player X';
+      const nameO = (document.getElementById('inO')?.value || 'Player O').trim() || 'Player O';
+      let s = '';
+      if (winner === 'draw') s = 'Draw';
+      else if (winner && mode === 'local') s = (winner === 'X' ? nameX : nameO) + ' wins';
+      else if (winner && mode === 'bot') s = winner === playerSymbol ? 'You win' : 'Bot wins';
+      else if (mode === 'bot' && botThinking) s = 'Bot thinking…';
+      else if (mode === 'bot') s = turn === playerSymbol ? 'Your turn — ' + playerSymbol : 'Bot turn';
+      else s = (turn === 'X' ? nameX : nameO) + ' — ' + turn;
+      document.getElementById('status').textContent = s;
+
+      // Score row
+      const row = document.getElementById('scoreRow');
+      if (mode === 'local') {
+        row.innerHTML =
+          '<div class="bg-black p-3 text-center"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666] truncate">' + esc(nameX) + ' · X</p><p class="text-lg font-mono mt-0.5">' + localScore.x + '</p></div>' +
+          '<div class="bg-black p-3 text-center"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666]">Draws</p><p class="text-lg font-mono mt-0.5">' + localScore.d + '</p></div>' +
+          '<div class="bg-black p-3 text-center"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666] truncate">' + esc(nameO) + ' · O</p><p class="text-lg font-mono mt-0.5">' + localScore.o + '</p></div>';
       } else {
-        if (winner === "draw") statusEl.innerHTML = '<span class="text-slate-300 text-xl font-extrabold">It\'s a Draw! 🤝</span>';
-        else if (winner) statusEl.innerHTML = winner===playerSymbol ? '<span class="text-emerald-400 text-xl font-extrabold">🎉 You Won!</span>' : '<span class="text-rose-400 text-xl font-extrabold">🤖 Bot Won!</span>';
-        else if (isBotThinking) statusEl.innerHTML = '<span class="text-amber-400 animate-pulse">Bot is thinking...</span>';
-        else statusEl.innerHTML = turn===playerSymbol ? '<span class="text-emerald-400">Your Turn (' + playerSymbol + ')</span>' : '<span class="text-amber-400 animate-pulse">Bot is thinking...</span>';
+        row.innerHTML =
+          '<div class="bg-black p-3 text-center"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666]">You</p><p class="text-lg font-mono mt-0.5">' + botScore.w + '</p></div>' +
+          '<div class="bg-black p-3 text-center"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666]">Draws</p><p class="text-lg font-mono mt-0.5">' + botScore.d + '</p></div>' +
+          '<div class="bg-black p-3 text-center"><p class="text-[10px] font-mono uppercase tracking-wider text-[#666]">AI</p><p class="text-lg font-mono mt-0.5">' + botScore.l + '</p></div>';
       }
-
-      // Score bar
-      const scoreEl = document.getElementById("scoreBar");
-      if (currentMode === "local") {
-        scoreEl.innerHTML = '<span class="text-rose-400">' + esc(localXName) + ': ' + localScores.x + '</span><span class="text-slate-400">•</span><span class="text-emerald-400">' + esc(localOName) + ': ' + localScores.o + '</span><span class="text-slate-400">•</span><span class="text-slate-300">Draws: ' + localScores.draws + '</span>';
-      } else {
-        scoreEl.innerHTML = '<span class="text-indigo-400">You (' + playerSymbol + '): ' + botScores.player + '</span><span class="text-slate-400">•</span><span class="text-emerald-400">Bot: ' + botScores.bot + '</span><span class="text-slate-400">•</span><span class="text-slate-300">Draws: ' + botScores.draws + '</span>';
-      }
-
-      // Action buttons
-      const actionEl = document.getElementById("actionBtns");
-      if (currentMode === "local") {
-        actionEl.innerHTML =
-          '<button onclick="resetGame()" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white text-xs font-bold rounded-xl transition">Rematch</button>' +
-          '<button onclick="startLocalSetup()" class="px-4 py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-white text-xs font-bold rounded-xl transition">Rename Players</button>';
-      } else {
-        actionEl.innerHTML = '<button onclick="resetGame()" class="px-6 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white text-xs font-bold rounded-xl transition">Reset Game</button>';
-      }
-    }
-
-    function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-    // Redefine cellClick for bot mode to use botTurnTrigger correctly
-    function cellClick(i) {
-      if (board[i] !== "" || winner) return;
-      if (currentMode === "bot") {
-        if (turn !== playerSymbol || isBotThinking) return;
-        board[i] = playerSymbol;
-        playSound("move");
-        const res = checkWinner(board);
-        if (res.winner) { winner = res.winner; winningLine = res.line || []; handleGameEnd(); render(); return; }
-        turn = playerSymbol === "X" ? "O" : "X";
-        render();
-        botTurnTrigger();
-      } else {
-        board[i] = turn;
-        playSound("move");
-        const res = checkWinner(board);
-        if (res.winner) { winner = res.winner; winningLine = res.line || []; handleGameEnd(); render(); return; }
-        turn = turn === "X" ? "O" : "X";
-        render();
-      }
-    }
-
-    // If bot plays first (player chose O), trigger bot on game start
-    function startBotGame() {
-      playSound("click");
-      botDifficulty = document.getElementById("botDifficulty").value;
-      currentMode = "bot";
-      resetBoard();
-      show("gameScreen");
-      document.getElementById("modeBadge").textContent = "BOT (" + botDifficulty + ")";
-      render();
-      // X always moves first; if player is O, bot (X) moves first
-      if (playerSymbol === "O") botTurnTrigger();
     }
   </script>
 </body>
