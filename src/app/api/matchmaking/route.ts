@@ -1,112 +1,143 @@
-import { getSupabaseServerClient, isSupabaseConfigured, supabaseMissingResponse } from "@/lib/supabase/server";
+import { db } from "@/db";
+import { matchmakingQueue, games } from "@/db/schema";
+import { eq, ne, isNull, lt, and } from "drizzle-orm";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// Clean up stale matchmaking queue entries
 async function cleanupStaleQueue() {
-  const supabase = getSupabaseServerClient();
-  const cutoff = new Date(Date.now() - 25000).toISOString();
-  await supabase.from("matchmaking_queue").delete().is("game_id", null).lt("joined_at", cutoff);
+  const cutoff = new Date(Date.now() - 25000); // 25 seconds of inactivity
+  try {
+    // Delete stale queue entries that aren't matched yet
+    await db.delete(matchmakingQueue).where(
+      and(
+        isNull(matchmakingQueue.gameId),
+        lt(matchmakingQueue.joinedAt, cutoff)
+      )
+    );
+  } catch (err) {
+    console.error("Error cleaning up stale queue:", err);
+  }
 }
 
+// POST /api/matchmaking
 export async function POST(req: NextRequest) {
   try {
-    if (!isSupabaseConfigured()) return supabaseMissingResponse();
-
     const body = await req.json();
     const { playerId, playerName, action } = body;
 
-    if (!playerId) return Response.json({ error: "Missing player ID" }, { status: 400 });
+    if (!playerId) {
+      return Response.json({ error: "Missing player ID" }, { status: 400 });
+    }
 
-    const supabase = getSupabaseServerClient();
     await cleanupStaleQueue();
 
     if (action === "leave") {
-      const { error } = await supabase.from("matchmaking_queue").delete().eq("player_id", playerId);
-      if (error) return Response.json({ error: error.message }, { status: 500 });
+      await db.delete(matchmakingQueue).where(eq(matchmakingQueue.playerId, playerId));
       return Response.json({ status: "left" });
     }
 
-    if (action !== "join") return Response.json({ error: "Invalid action" }, { status: 400 });
-    if (!playerName) return Response.json({ error: "Missing player name" }, { status: 400 });
+    if (action === "join") {
+      if (!playerName) {
+        return Response.json({ error: "Missing player name" }, { status: 400 });
+      }
 
-    const { data: existingEntry, error: existingError } = await supabase
-      .from("matchmaking_queue")
-      .select("*")
-      .eq("player_id", playerId)
-      .maybeSingle();
+      // Check if player already has an entry
+      const existingQueue = await db
+        .select()
+        .from(matchmakingQueue)
+        .where(eq(matchmakingQueue.playerId, playerId));
 
-    if (existingError) return Response.json({ error: existingError.message }, { status: 500 });
+      let playerEntry = existingQueue[0];
 
-    if (existingEntry?.game_id) {
-      await supabase.from("matchmaking_queue").delete().eq("player_id", playerId);
-      return Response.json({ status: "matched", gameId: existingEntry.game_id });
-    }
+      if (playerEntry) {
+        // If already matched, return the game ID
+        if (playerEntry.gameId) {
+          // Clean up this queue entry now that we matched and the client knows
+          await db.delete(matchmakingQueue).where(eq(matchmakingQueue.playerId, playerId));
+          return Response.json({ status: "matched", gameId: playerEntry.gameId });
+        }
 
-    if (existingEntry) {
-      const { error } = await supabase
-        .from("matchmaking_queue")
-        .update({ player_name: playerName, joined_at: new Date().toISOString() })
-        .eq("player_id", playerId);
-      if (error) return Response.json({ error: error.message }, { status: 500 });
-    } else {
-      const { error } = await supabase.from("matchmaking_queue").insert({
-        player_id: playerId,
-        player_name: playerName,
-        joined_at: new Date().toISOString(),
-      });
-      if (error) return Response.json({ error: error.message }, { status: 500 });
-    }
+        // Update the timestamp to keep it alive
+        await db
+          .update(matchmakingQueue)
+          .set({ joinedAt: new Date() })
+          .where(eq(matchmakingQueue.playerId, playerId));
+      } else {
+        // Insert new entry
+        const [inserted] = await db
+          .insert(matchmakingQueue)
+          .values({
+            playerId,
+            playerName,
+            joinedAt: new Date(),
+          })
+          .returning();
+        playerEntry = inserted;
+      }
 
-    const { data: opponents, error: opponentError } = await supabase
-      .from("matchmaking_queue")
-      .select("*")
-      .is("game_id", null)
-      .neq("player_id", playerId)
-      .order("joined_at", { ascending: true })
-      .limit(1);
+      // Try to find another player who is waiting (gameId is null and not current player)
+      const opponents = await db
+        .select()
+        .from(matchmakingQueue)
+        .where(
+          and(
+            isNull(matchmakingQueue.gameId),
+            ne(matchmakingQueue.playerId, playerId)
+          )
+        )
+        .limit(1);
 
-    if (opponentError) return Response.json({ error: opponentError.message }, { status: 500 });
+      if (opponents.length > 0) {
+        const opponent = opponents[0];
+        const gameId = "game_" + Math.random().toString(36).substring(2, 15);
 
-    if (!opponents || opponents.length === 0) {
+        // Decide symbols: randomly assign who is X and who is O. Let's say player who was waiting first is X.
+        // The opponent was waiting first (they are already in the queue). So they are X, and joiner is O.
+        const playerXId = opponent.playerId;
+        const playerXName = opponent.playerName;
+        const playerOId = playerId;
+        const playerOName = playerName;
+
+        // Create game
+        await db.insert(games).values({
+          id: gameId,
+          playerXId,
+          playerXName,
+          playerOId,
+          playerOName,
+          mode: "online",
+          board: "---------",
+          turn: "X",
+          status: "active",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastMoveAt: new Date(),
+        });
+
+        // Update both players' matchmaking queue entries
+        await db
+          .update(matchmakingQueue)
+          .set({ gameId })
+          .where(eq(matchmakingQueue.playerId, playerXId));
+
+        await db
+          .update(matchmakingQueue)
+          .set({ gameId })
+          .where(eq(matchmakingQueue.playerId, playerOId));
+
+        // Immediately delete the current player queue entry since we matched it
+        await db.delete(matchmakingQueue).where(eq(matchmakingQueue.playerId, playerId));
+
+        return Response.json({ status: "matched", gameId });
+      }
+
+      // No opponent found, still waiting
       return Response.json({ status: "waiting" });
     }
 
-    const opponent = opponents[0];
-    const gameId = "game_" + Math.random().toString(36).substring(2, 15);
-    const now = new Date().toISOString();
-
-    const playerXId = opponent.player_id;
-    const playerXName = opponent.player_name;
-    const playerOId = playerId;
-    const playerOName = playerName;
-
-    const { error: gameError } = await supabase.from("games").insert({
-      id: gameId,
-      player_x_id: playerXId,
-      player_x_name: playerXName,
-      player_o_id: playerOId,
-      player_o_name: playerOName,
-      mode: "online",
-      board: "---------",
-      turn: "X",
-      status: "active",
-      created_at: now,
-      updated_at: now,
-      last_move_at: now,
-    });
-
-    if (gameError) return Response.json({ error: gameError.message }, { status: 500 });
-
-    const { error: xQueueError } = await supabase
-      .from("matchmaking_queue")
-      .update({ game_id: gameId })
-      .eq("player_id", playerXId);
-    if (xQueueError) return Response.json({ error: xQueueError.message }, { status: 500 });
-
-    await supabase.from("matchmaking_queue").delete().eq("player_id", playerOId);
-
-    return Response.json({ status: "matched", gameId });
+    return Response.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
     return Response.json({ error: error.message || "Failed matchmaking" }, { status: 500 });
   }

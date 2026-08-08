@@ -1,20 +1,15 @@
-import {
-  getSupabaseServerClient,
-  isSupabaseConfigured,
-  normalizeGame,
-  normalizeMessage,
-  supabaseMissingResponse,
-  type GameRow,
-} from "@/lib/supabase/server";
+import { db } from "@/db";
+import { games, chatMessages, players } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 function checkWinner(board: string): "X" | "O" | "draw" | null {
   const winningLines = [
-    [0, 1, 2], [3, 4, 5], [6, 7, 8],
-    [0, 3, 6], [1, 4, 7], [2, 5, 8],
-    [0, 4, 8], [2, 4, 6],
+    [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+    [0, 3, 6], [1, 4, 7], [2, 5, 8], // Cols
+    [0, 4, 8], [2, 4, 6],            // Diagonals
   ];
 
   for (const [a, b, c] of winningLines) {
@@ -22,147 +17,184 @@ function checkWinner(board: string): "X" | "O" | "draw" | null {
       return board[a] as "X" | "O";
     }
   }
-  return board.includes("-") ? null : "draw";
+
+  if (!board.includes("-")) {
+    return "draw";
+  }
+
+  return null;
 }
 
-async function incrementPlayerColumn(playerId: string, column: string) {
-  const supabase = getSupabaseServerClient();
-  const { data: player, error: fetchError } = await supabase
-    .from("players")
-    .select(column)
-    .eq("id", playerId)
-    .maybeSingle();
-
-  if (fetchError || !player) return;
-
-  const playerRecord = player as unknown as Record<string, unknown>;
-  const current = Number(playerRecord[column] ?? 0);
-  await supabase
-    .from("players")
-    .update({ [column]: current + 1, updated_at: new Date().toISOString() })
-    .eq("id", playerId);
-}
-
+// Update statistics of players
 async function updateOnlineStats(winnerSymbol: "X" | "O" | "draw", playerXId: string, playerOId: string | null) {
-  if (winnerSymbol === "draw") {
-    await incrementPlayerColumn(playerXId, "draws_online");
-    if (playerOId) await incrementPlayerColumn(playerOId, "draws_online");
-    return;
-  }
-
-  if (winnerSymbol === "X") {
-    await incrementPlayerColumn(playerXId, "wins_online");
-    if (playerOId) await incrementPlayerColumn(playerOId, "losses_online");
-    return;
-  }
-
-  await incrementPlayerColumn(playerXId, "losses_online");
-  if (playerOId) await incrementPlayerColumn(playerOId, "wins_online");
-}
-
-async function getGame(id: string): Promise<GameRow | null> {
-  const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase.from("games").select("*").eq("id", id).maybeSingle();
-  if (error) throw new Error(error.message);
-  return data as GameRow | null;
-}
-
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!isSupabaseConfigured()) return supabaseMissingResponse();
+    if (winnerSymbol === "draw") {
+      // Increment draws for both
+      await db.update(players)
+        .set({ drawsOnline: sql`${players.drawsOnline} + 1`, updatedAt: new Date() })
+        .where(eq(players.id, playerXId));
+      if (playerOId) {
+        await db.update(players)
+          .set({ drawsOnline: sql`${players.drawsOnline} + 1`, updatedAt: new Date() })
+          .where(eq(players.id, playerOId));
+      }
+    } else if (winnerSymbol === "X") {
+      // X wins, O loses
+      await db.update(players)
+        .set({ winsOnline: sql`${players.winsOnline} + 1`, updatedAt: new Date() })
+        .where(eq(players.id, playerXId));
+      if (playerOId) {
+        await db.update(players)
+          .set({ lossesOnline: sql`${players.lossesOnline} + 1`, updatedAt: new Date() })
+          .where(eq(players.id, playerOId));
+      }
+    } else if (winnerSymbol === "O") {
+      // O wins, X loses
+      await db.update(players)
+        .set({ lossesOnline: sql`${players.lossesOnline} + 1`, updatedAt: new Date() })
+        .where(eq(players.id, playerXId));
+      if (playerOId) {
+        await db.update(players)
+          .set({ winsOnline: sql`${players.winsOnline} + 1`, updatedAt: new Date() })
+          .where(eq(players.id, playerOId));
+      }
+    }
+  } catch (err) {
+    console.error("Failed to update player stats: ", err);
+  }
+}
 
+// GET /api/game/[id]
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
     const { id } = await params;
-    const supabase = getSupabaseServerClient();
 
-    const game = await getGame(id);
-    if (!game) return Response.json({ error: "Game not found" }, { status: 404 });
+    const gameResults = await db.select().from(games).where(eq(games.id, id));
+    if (gameResults.length === 0) {
+      return Response.json({ error: "Game not found" }, { status: 404 });
+    }
 
-    const { data: messages, error: messageError } = await supabase
-      .from("chat_messages")
-      .select("*")
-      .eq("game_id", id)
-      .order("created_at", { ascending: true });
+    const game = gameResults[0];
 
-    if (messageError) return Response.json({ error: messageError.message }, { status: 500 });
+    // Fetch messages for this game
+    const messages = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.gameId, id))
+      .orderBy(chatMessages.createdAt);
 
-    return Response.json({
-      game: normalizeGame(game),
-      messages: (messages || []).map((message) => normalizeMessage(message)).filter(Boolean),
-    });
+    return Response.json({ game, messages });
   } catch (error: any) {
     return Response.json({ error: error.message || "Failed to fetch game" }, { status: 500 });
   }
 }
 
+// POST /api/game/[id]
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!isSupabaseConfigured()) return supabaseMissingResponse();
-
     const { id } = await params;
     const body = await req.json();
     const { playerId, action, index } = body;
 
-    if (!playerId) return Response.json({ error: "Missing player ID" }, { status: 400 });
+    if (!playerId) {
+      return Response.json({ error: "Missing player ID" }, { status: 400 });
+    }
 
-    const supabase = getSupabaseServerClient();
-    const game = await getGame(id);
-    if (!game) return Response.json({ error: "Game not found" }, { status: 404 });
-    if (game.status !== "active") return Response.json({ error: "Game is already finished" }, { status: 400 });
+    const gameResults = await db.select().from(games).where(eq(games.id, id));
+    if (gameResults.length === 0) {
+      return Response.json({ error: "Game not found" }, { status: 404 });
+    }
 
+    const game = gameResults[0];
+
+    if (game.status !== "active") {
+      return Response.json({ error: "Game is already finished" }, { status: 400 });
+    }
+
+    // Handle Forfeit
     if (action === "forfeit") {
-      const winnerSymbol: "X" | "O" = playerId === game.player_x_id ? "O" : "X";
-      const now = new Date().toISOString();
+      const winnerSymbol = playerId === game.playerXId ? "O" : "X";
+      const winnerName = winnerSymbol === "X" ? game.playerXName : (game.playerOName || "O");
 
-      const { data, error } = await supabase
-        .from("games")
-        .update({ status: "finished", winner: winnerSymbol, updated_at: now, last_move_at: now })
-        .eq("id", id)
-        .select("*")
-        .single();
+      const [updatedGame] = await db
+        .update(games)
+        .set({
+          status: "finished",
+          winner: winnerSymbol,
+          updatedAt: new Date(),
+          lastMoveAt: new Date(),
+        })
+        .where(eq(games.id, id))
+        .returning();
 
-      if (error) return Response.json({ error: error.message }, { status: 500 });
-      await updateOnlineStats(winnerSymbol, game.player_x_id, game.player_o_id);
-      return Response.json({ game: normalizeGame(data) });
+      // Update online stats
+      await updateOnlineStats(winnerSymbol, game.playerXId, game.playerOId);
+
+      return Response.json({ game: updatedGame });
     }
 
-    if (action !== "move") return Response.json({ error: "Invalid action" }, { status: 400 });
-    if (index === undefined || index < 0 || index > 8) {
-      return Response.json({ error: "Invalid move index" }, { status: 400 });
+    // Handle Move
+    if (action === "move") {
+      if (index === undefined || index < 0 || index > 8) {
+        return Response.json({ error: "Invalid move index" }, { status: 400 });
+      }
+
+      // Check player identity & current turn
+      const isPlayerX = playerId === game.playerXId;
+      const isPlayerO = playerId === game.playerOId;
+
+      if (!isPlayerX && !isPlayerO) {
+        return Response.json({ error: "You are not a player in this game" }, { status: 403 });
+      }
+
+      const playerSymbol = isPlayerX ? "X" : "O";
+
+      if (game.turn !== playerSymbol) {
+        return Response.json({ error: "It is not your turn" }, { status: 400 });
+      }
+
+      // Check if spot is empty
+      if (game.board[index] !== "-") {
+        return Response.json({ error: "Cell is already taken" }, { status: 400 });
+      }
+
+      // Construct new board string
+      const boardArr = game.board.split("");
+      boardArr[index] = playerSymbol;
+      const updatedBoard = boardArr.join("");
+
+      // Check winner
+      const winnerResult = checkWinner(updatedBoard);
+
+      const updates: Record<string, any> = {
+        board: updatedBoard,
+        updatedAt: new Date(),
+        lastMoveAt: new Date(),
+      };
+
+      if (winnerResult) {
+        updates.status = "finished";
+        updates.winner = winnerResult;
+      } else {
+        // Toggle turn
+        updates.turn = playerSymbol === "X" ? "O" : "X";
+      }
+
+      const [updatedGame] = await db
+        .update(games)
+        .set(updates)
+        .where(eq(games.id, id))
+        .returning();
+
+      // If finished, update stats
+      if (winnerResult) {
+        await updateOnlineStats(winnerResult, game.playerXId, game.playerOId);
+      }
+
+      return Response.json({ game: updatedGame });
     }
 
-    const isPlayerX = playerId === game.player_x_id;
-    const isPlayerO = playerId === game.player_o_id;
-    if (!isPlayerX && !isPlayerO) return Response.json({ error: "You are not a player in this game" }, { status: 403 });
-
-    const playerSymbol = isPlayerX ? "X" : "O";
-    if (game.turn !== playerSymbol) return Response.json({ error: "It is not your turn" }, { status: 400 });
-    if (game.board[index] !== "-") return Response.json({ error: "Cell is already taken" }, { status: 400 });
-
-    const boardArr = game.board.split("");
-    boardArr[index] = playerSymbol;
-    const updatedBoard = boardArr.join("");
-    const winnerResult = checkWinner(updatedBoard);
-    const now = new Date().toISOString();
-
-    const updates: Record<string, any> = {
-      board: updatedBoard,
-      updated_at: now,
-      last_move_at: now,
-    };
-
-    if (winnerResult) {
-      updates.status = "finished";
-      updates.winner = winnerResult;
-    } else {
-      updates.turn = playerSymbol === "X" ? "O" : "X";
-    }
-
-    const { data, error } = await supabase.from("games").update(updates).eq("id", id).select("*").single();
-    if (error) return Response.json({ error: error.message }, { status: 500 });
-
-    if (winnerResult) await updateOnlineStats(winnerResult, game.player_x_id, game.player_o_id);
-
-    return Response.json({ game: normalizeGame(data) });
+    return Response.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
     return Response.json({ error: error.message || "Failed to make game action" }, { status: 500 });
   }

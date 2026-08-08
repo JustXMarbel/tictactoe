@@ -1,18 +1,14 @@
-import {
-  getSupabaseServerClient,
-  isSupabaseConfigured,
-  normalizeMessage,
-  supabaseMissingResponse,
-  type GameRow,
-} from "@/lib/supabase/server";
+import { db } from "@/db";
+import { games, chatMessages } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// POST /api/game/[id]/chat
+// Body: { playerId, message }
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    if (!isSupabaseConfigured()) return supabaseMissingResponse();
-
     const { id } = await params;
     const body = await req.json();
     const { playerId, message } = body;
@@ -21,36 +17,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return Response.json({ error: "Missing player ID or message content" }, { status: 400 });
     }
 
-    const supabase = getSupabaseServerClient();
-    const { data: game, error: gameError } = await supabase.from("games").select("*").eq("id", id).maybeSingle();
+    // Fetch game to verify player and get their name
+    const gameResults = await db.select().from(games).where(eq(games.id, id));
+    if (gameResults.length === 0) {
+      return Response.json({ error: "Game not found" }, { status: 404 });
+    }
 
-    if (gameError) return Response.json({ error: gameError.message }, { status: 500 });
-    if (!game) return Response.json({ error: "Game not found" }, { status: 404 });
+    const game = gameResults[0];
 
-    const gameRow = game as GameRow;
     let senderName = "";
-    if (playerId === gameRow.player_x_id) {
-      senderName = gameRow.player_x_name;
-    } else if (playerId === gameRow.player_o_id) {
-      senderName = gameRow.player_o_name || "O";
+    if (playerId === game.playerXId) {
+      senderName = game.playerXName;
+    } else if (playerId === game.playerOId) {
+      senderName = game.playerOName || "O";
     } else {
       return Response.json({ error: "You are not a player in this game" }, { status: 403 });
     }
 
-    const { data: newMessage, error } = await supabase
-      .from("chat_messages")
-      .insert({
-        game_id: id,
-        sender_id: playerId,
-        sender_name: senderName,
+    // Insert message
+    const [newMessage] = await db
+      .insert(chatMessages)
+      .values({
+        gameId: id,
+        senderId: playerId,
+        senderName,
         message: message.trim(),
-        created_at: new Date().toISOString(),
+        createdAt: new Date(),
       })
-      .select("*")
-      .single();
+      .returning();
 
-    if (error) return Response.json({ error: error.message }, { status: 500 });
-    return Response.json({ message: normalizeMessage(newMessage) });
+    return Response.json({ message: newMessage });
   } catch (error: any) {
     return Response.json({ error: error.message || "Failed to send message" }, { status: 500 });
   }

@@ -394,12 +394,6 @@ export default function GamePage() {
       });
       const data = await res.json();
 
-      if (!res.ok || data.error) {
-        setErrorMessage(data.error || "Supabase matchmaking is not available right now.");
-        setMatchmakingStatus("idle");
-        return;
-      }
-
       if (data.status === "matched") {
         setMatchmakingStatus("matched");
         setOnlineGameId(data.gameId);
@@ -437,13 +431,6 @@ export default function GamePage() {
           body: JSON.stringify({ playerId, playerName, action: "join" }),
         });
         const data = await res.json();
-
-        if (!res.ok || data.error) {
-          clearInterval(matchmakingIntervalRef.current);
-          setErrorMessage(data.error || "Supabase matchmaking is not available right now.");
-          setMatchmakingStatus("idle");
-          return;
-        }
 
         if (data.status === "matched") {
           clearInterval(matchmakingIntervalRef.current);

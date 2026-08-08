@@ -37,7 +37,7 @@
       </div>
       <div class="flex items-center gap-3">
         <button id="soundToggle" class="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition" title="Toggle Sound">🔊</button>
-        <a href="/" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-900/20">🌐 Online Matchmaking</a>
+        <button onclick="openOnlineMatchmaking()" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-900/20">🌐 Online Matchmaking</button>
       </div>
     </div>
   </header>
@@ -106,7 +106,7 @@
               <p class="text-xs text-slate-400 mt-1 max-w-md">Get paired with live players worldwide with real-time chat. Runs in the full server-powered arena.</p>
             </div>
           </div>
-          <a href="/" class="w-full sm:w-auto text-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-indigo-900/20">Match Online</a>
+          <button onclick="openOnlineMatchmaking()" class="w-full sm:w-auto text-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-indigo-900/20">Match Online</button>
         </div>
       </div>
     </div>
@@ -158,11 +158,116 @@
   <footer class="mt-12 border-t border-indigo-950/60 bg-slate-950/40 py-8 text-center text-slate-500 text-xs px-4">
     <div class="max-w-5xl mx-auto space-y-2">
       <p class="font-semibold text-slate-400">Tic-Tac-Toe Arena — Standalone index.html</p>
-      <p>Pass &amp; Play • Minimax AI Bot • <a href="/" class="text-indigo-400 hover:underline">Online Matchmaking (full app)</a></p>
+      <p>Pass &amp; Play • Minimax AI Bot • <button onclick="openOnlineMatchmaking()" class="text-indigo-400 hover:underline">Online Matchmaking (server app)</button></p>
     </div>
   </footer>
 
+  <!-- ONLINE BACKEND MODAL -->
+  <div id="onlineBackendModal" class="hidden fixed inset-0 z-[60] bg-slate-950/80 backdrop-blur-sm px-4 py-6 flex items-center justify-center">
+    <div class="w-full max-w-lg rounded-3xl bg-slate-900 border border-indigo-900 shadow-2xl p-6 animate-fade-in">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Server Required</span>
+          <h2 class="mt-3 text-xl font-black text-white">Online matchmaking needs the backend app</h2>
+        </div>
+        <button onclick="closeOnlineBackendModal()" class="text-slate-500 hover:text-white text-xl leading-none">×</button>
+      </div>
+
+      <p class="mt-4 text-sm text-slate-300 leading-relaxed">
+        GitHub Pages can host this standalone <strong>index.html</strong>, but it cannot run PostgreSQL, Drizzle ORM, or Next.js API routes. Local mode and Bot mode work here, while live matchmaking must open your deployed fullstack app.
+      </p>
+
+      <div class="mt-5 space-y-2">
+        <label class="block text-[10px] font-black uppercase text-slate-400">Fullstack backend URL</label>
+        <input id="backendUrlInput" type="url" placeholder="https://your-tic-tac-toe-app.vercel.app" class="w-full bg-slate-950 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500" />
+        <p class="text-[11px] text-slate-500">
+          Deploy the full Next.js app to a server platform such as Vercel, Railway, Render, or Fly.io with a PostgreSQL database, then paste that app URL here. It will be saved in this browser.
+        </p>
+      </div>
+
+      <div class="mt-5 flex flex-col sm:flex-row gap-2">
+        <button onclick="saveBackendAndOpen()" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition">Save & Open Online Arena</button>
+        <button onclick="clearBackendUrl()" class="px-4 py-2.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-bold rounded-xl transition">Clear Saved URL</button>
+      </div>
+
+      <div class="mt-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-3 text-[11px] text-amber-200 leading-relaxed">
+        Tip: If you deployed only this HTML file to GitHub, online matchmaking cannot work there. Deploy the complete project folder as a Next.js app for online play.
+      </div>
+    </div>
+  </div>
+
   <script>
+    // ---------- ONLINE BACKEND ROUTING ----------
+    const BACKEND_STORAGE_KEY = "ttt_backend_url";
+
+    function normalizeBackendUrl(url) {
+      const trimmed = String(url || "").trim().replace(/\/$/, "");
+      if (!trimmed) return "";
+      try {
+        const parsed = new URL(trimmed);
+        if (!["http:", "https:"].includes(parsed.protocol)) return "";
+        return parsed.origin + parsed.pathname.replace(/\/$/, "");
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function isStaticOnlyHost() {
+      const host = window.location.hostname.toLowerCase();
+      return host.endsWith("github.io") || window.location.protocol === "file:";
+    }
+
+    function openOnlineMatchmaking() {
+      playSound("click");
+      const savedBackend = normalizeBackendUrl(localStorage.getItem(BACKEND_STORAGE_KEY));
+
+      // If hosted by the full Next.js app, `/` is the online-capable app.
+      if (!isStaticOnlyHost()) {
+        if (window.location.pathname.endsWith("/index.html")) {
+          window.location.href = window.location.origin + "/";
+        } else {
+          window.location.href = "/";
+        }
+        return;
+      }
+
+      // GitHub Pages/static/file deployments need a real backend URL.
+      if (savedBackend) {
+        window.location.href = savedBackend + "/";
+        return;
+      }
+
+      const modal = document.getElementById("onlineBackendModal");
+      const input = document.getElementById("backendUrlInput");
+      input.value = savedBackend || "";
+      modal.classList.remove("hidden");
+      setTimeout(() => input.focus(), 50);
+    }
+
+    function closeOnlineBackendModal() {
+      document.getElementById("onlineBackendModal").classList.add("hidden");
+    }
+
+    function saveBackendAndOpen() {
+      const input = document.getElementById("backendUrlInput");
+      const normalized = normalizeBackendUrl(input.value);
+      if (!normalized) {
+        input.classList.add("border-rose-500");
+        input.placeholder = "Please enter a valid https:// URL";
+        playSound("lose");
+        return;
+      }
+      localStorage.setItem(BACKEND_STORAGE_KEY, normalized);
+      playSound("click");
+      window.location.href = normalized + "/";
+    }
+
+    function clearBackendUrl() {
+      localStorage.removeItem(BACKEND_STORAGE_KEY);
+      document.getElementById("backendUrlInput").value = "";
+      playSound("click");
+    }
+
     // ---------- STATE ----------
     let soundEnabled = true;
     let playerSymbol = "X";

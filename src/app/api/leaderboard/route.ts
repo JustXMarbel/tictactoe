@@ -1,32 +1,28 @@
-import { getSupabaseServerClient, isSupabaseConfigured, normalizePlayer, supabaseMissingResponse } from "@/lib/supabase/server";
+import { db } from "@/db";
+import { players } from "@/db/schema";
+import { desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    if (!isSupabaseConfigured()) return supabaseMissingResponse();
-
-    const supabase = getSupabaseServerClient();
-
-    const { data: onlineLeaders, error: onlineError } = await supabase
-      .from("players")
-      .select("*")
-      .order("wins_online", { ascending: false })
+    // Top 10 online players
+    const onlineLeaders = await db
+      .select()
+      .from(players)
+      .orderBy(desc(players.winsOnline))
       .limit(10);
 
-    if (onlineError) return Response.json({ error: onlineError.message }, { status: 500 });
-
-    const { data: botLeaders, error: botError } = await supabase
-      .from("players")
-      .select("*")
-      .order("wins_bot", { ascending: false })
+    // Top 10 bot players
+    const botLeaders = await db
+      .select()
+      .from(players)
+      .orderBy(desc(players.winsBot))
       .limit(10);
-
-    if (botError) return Response.json({ error: botError.message }, { status: 500 });
 
     return Response.json({
-      onlineLeaders: (onlineLeaders || []).map((player) => normalizePlayer(player)).filter(Boolean),
-      botLeaders: (botLeaders || []).map((player) => normalizePlayer(player)).filter(Boolean),
+      onlineLeaders,
+      botLeaders,
     });
   } catch (error: any) {
     return Response.json({ error: error.message || "Failed to fetch leaderboard" }, { status: 500 });
